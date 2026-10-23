@@ -1,0 +1,177 @@
+diff --git a/composer.json b/composer.json
+index 0b74b36..783ec97 100644
+--- a/composer.json
++++ b/composer.json
+@@ -24,7 +24,7 @@
+         "silverstripe/template-engine": "^1",
+         "symfony/filesystem": "^7.0",
+         "symfony/finder": "^7.0",
+-        "intervention/image": "^3.9",
++        "intervention/image": "^4.4",
+         "league/flysystem": "^3.29",
+         "league/flysystem-local": "^3.29"
+     },
+diff --git a/src/Conversion/InterventionImageFileConverter.php b/src/Conversion/InterventionImageFileConverter.php
+index ebfa70b..ab3c271 100644
+--- a/src/Conversion/InterventionImageFileConverter.php
++++ b/src/Conversion/InterventionImageFileConverter.php
+@@ -31,7 +31,7 @@ class InterventionImageFileConverter implements FileConverter
+             return false;
+         }
+         /** @var InterventionBackend $backend */
+-        $driver = $backend->getImageManager()->driver();
++        $driver = $backend->getImageManager()->driver;
+         return $driver->supports($fromExtension) && $driver->supports($toExtension);
+     }
+ 
+@@ -58,7 +58,7 @@ class InterventionImageFileConverter implements FileConverter
+                         throw new FileConverterException("ImageBackend must be an instance of InterventionBackend. Got $actualClass");
+                     }
+                     /** @var InterventionBackend $originalBackend */
+-                    $driver = $originalBackend->getImageManager()->driver();
++                    $driver = $originalBackend->getImageManager()->driver;
+                     if (!$driver->supports($toExtension)) {
+                         throw new FileConverterException("Conversion to format '$toExtension' is not supported.");
+                     }
+diff --git a/src/InterventionBackend.php b/src/InterventionBackend.php
+index 6a19c61..7854af0 100644
+--- a/src/InterventionBackend.php
++++ b/src/InterventionBackend.php
+@@ -3,11 +3,13 @@
+ namespace SilverStripe\Assets;
+ 
+ use BadMethodCallException;
+-use Intervention\Image\Colors\Rgb\Channels\Alpha;
+ use Intervention\Image\Colors\Rgb\Color;
+ use Intervention\Image\Drivers\AbstractEncoder;
++use Intervention\Image\Exceptions\ArgumentException;
+ use Intervention\Image\Exceptions\DecoderException;
+ use Intervention\Image\Exceptions\EncoderException;
++use Intervention\Image\Exceptions\FilesystemException;
++use Intervention\Image\Exceptions\NotSupportedException;
+ use Intervention\Image\Interfaces\ImageInterface as InterventionImage;
+ use Intervention\Image\ImageManager;
+ use InvalidArgumentException;
+@@ -210,17 +212,19 @@ class InterventionBackend implements Image_Backend, Flushable
+         // Handle resource
+         $error = InterventionBackend::FAILED_UNKNOWN;
+         try {
+-            $resource = $this->getImageManager()->read($stream);
++            $resource = $this->getImageManager()->decodeStream($stream);
+ 
+             $this->setImageResource($resource);
+             $this->markSuccess($hash, $variant);
+             $this->warmCache($hash, $variant);
+             $error = null;
+             return $resource;
+-        } catch (DecoderException $ex) {
++        } catch (DecoderException | ArgumentException $ex) {
+             // Handle unsupported image encoding on load (will be marked as failed)
+             // Unsupported exceptions are handled without being raised as exceptions
+             $error = InterventionBackend::FAILED_INVALID;
++        } catch (FilesystemException $ex) {
++            $error = InterventionBackend::FAILED_MISSING;
+         } finally {
+             if ($error) {
+                 $this->markFailed($hash, $variant, $error);
+@@ -243,13 +247,15 @@ class InterventionBackend implements Image_Backend, Flushable
+         // Handle resource
+         $error = InterventionBackend::FAILED_UNKNOWN;
+         try {
+-            $this->setImageResource($this->getImageManager()->read($path));
++            $this->setImageResource($this->getImageManager()->decodePath($path));
+             $this->markSuccess($hash, null);
+             $error = null;
+-        } catch (DecoderException $ex) {
++        } catch (DecoderException | ArgumentException $ex) {
+             // Handle unsupported image encoding on load (will be marked as failed)
+             // Unsupported exceptions are handled without being raised as exceptions
+             $error = InterventionBackend::FAILED_INVALID;
++        } catch (FilesystemException $ex) {
++            $error = InterventionBackend::FAILED_MISSING;
+         } finally {
+             if ($error) {
+                 $this->markFailed($hash, null, $error);
+@@ -291,7 +297,7 @@ class InterventionBackend implements Image_Backend, Flushable
+             $extension = pathinfo($url, PATHINFO_EXTENSION);
+             // Save file
+             $result = $assetStore->setFromString(
+-                $resource->encodeByExtension($extension, quality: $this->getQuality())->toString(),
++                $resource->encodeUsingFileExtension($extension, quality: $this->getQuality())->toString(),
+                 $filename,
+                 $hash,
+                 $variant,
+@@ -304,7 +310,7 @@ class InterventionBackend implements Image_Backend, Flushable
+             }
+ 
+             return $result;
+-        } catch (EncoderException $e) {
++        } catch (EncoderException | NotSupportedException | ArgumentException $e) {
+             return [];
+         }
+     }
+@@ -321,8 +327,8 @@ class InterventionBackend implements Image_Backend, Flushable
+             if (!$resource) {
+                 throw new BadMethodCallException("Cannot write corrupt file to store");
+             }
+-            $resource->save($path, $this->getQuality());
+-        } catch (EncoderException $e) {
++            $resource->save($path, quality: $this->getQuality());
++        } catch (EncoderException | NotSupportedException | ArgumentException $e) {
+             return false;
+         }
+         return true;
+@@ -514,13 +520,17 @@ class InterventionBackend implements Image_Backend, Flushable
+             throw new InvalidArgumentException('$transparencyPercent must be between 0 and 100. Got ' . $transparencyPercent);
+         }
+ 
+-        $bgColour = Color::create($backgroundColour);
++        $bgColour = Color::parse($backgroundColour);
+         // The Color class is immutable, so we have to instantiate a new one to set the alpha channel.
+-        // No need to do that if both the $backgroundColor and $transparencyPercent are 0.
+-        if ($bgColour->channel(Alpha::class)->value() !== 0 && $transparencyPercent !== 0) {
+-            $channels = $bgColour->channels();
+-            $alpha = (int) round(255 * (1 - ($transparencyPercent * 0.01)));
+-            $bgColour = new Color($channels[0]->value(), $channels[1]->value(), $channels[2]->value(), $alpha);
++        // No need to do that if the $backgroundColor is fully transparent or $transparencyPercent is 0.
++        if (!$bgColour->isClear() && $transparencyPercent !== 0) {
++            $alpha = (100 - $transparencyPercent) / 100;
++            $bgColour = new Color(
++                $bgColour->red()->value(),
++                $bgColour->green()->value(),
++                $bgColour->blue()->value(),
++                (float) $alpha
++            );
+         }
+ 
+         // resize the image maintaining the aspect ratio and pad out the canvas
+@@ -560,7 +570,7 @@ class InterventionBackend implements Image_Backend, Flushable
+      */
+     public function setAllowsAnimationInManipulations(bool $allow): static
+     {
+-        $this->getImageManager()->driver()->config()->decodeAnimation = $allow;
++        $this->getImageManager()->driver->config()->decodeAnimation = $allow;
+         return $this;
+     }
+ 
+@@ -569,7 +579,7 @@ class InterventionBackend implements Image_Backend, Flushable
+      */
+     public function getAllowsAnimationInManipulations(): bool
+     {
+-        return $this->getImageManager()->driver()->config()->decodeAnimation;
++        return $this->getImageManager()->driver->config()->decodeAnimation;
+     }
+ 
+     /**
+diff --git a/src/InterventionManagerFactory.php b/src/InterventionManagerFactory.php
+index 870eb1f..0f08da5 100644
+--- a/src/InterventionManagerFactory.php
++++ b/src/InterventionManagerFactory.php
+@@ -15,6 +15,6 @@ class InterventionManagerFactory implements Factory
+ {
+     public function create(string $service, array $params = []): ImageManager
+     {
+-        return ImageManager::withDriver(Injector::inst()->create('InterventionImageDriver'), ...$params);
++        return new ImageManager(Injector::inst()->create('InterventionImageDriver'), ...$params);
+     }
+ }

@@ -1,0 +1,31 @@
+{
+	"name": "lerni/silverstripe-assets-intervention4",
+	"description": "Runs silverstripe/assets 3.2 on Intervention Image 4 (composer patch)",
+	"type": "library",
+	"license": "BSD-3-Clause",
+	"require": {
+		"php": "^8.3",
+		"cweagans/composer-patches": "^2",
+		"silverstripe/assets": "~3.2.0",
+		"intervention/image": "^4.4"
+	},
+	"provide": {
+		"intervention/image": "3.11.99"
+	},
+	"extra": {
+		"patches": {
+			"silverstripe/assets": [
+				{
+					"description": "Read image resource from stream instead of temp file (silverstripe-assets 3.4, upstream PR #716)",
+					"url": "https://raw.githubusercontent.com/lerni/silverstripe-assets-intervention4/3.2.0/patches/0001-stream-read-no-tempfile.patch",
+					"sha256": "60c8796ae75230f0f62b8df321398f5ab43425c856d8fe54ae87623449922c76"
+				},
+				{
+					"description": "Port InterventionBackend, factory, converter and tests to Intervention Image 4",
+					"url": "https://raw.githubusercontent.com/lerni/silverstripe-assets-intervention4/3.2.0/patches/0002-intervention-image-4.patch",
+					"sha256": "1377b5530fb7691263950f61c5188a4923febfc226d0f0ad850043ad38a5ae29"
+				}
+			]
+		}
+	}
+}

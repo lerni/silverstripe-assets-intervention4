@@ -1,0 +1,107 @@
+diff --git a/tests/php/GDImageTest.php b/tests/php/GDImageTest.php
+index 8d2807c..216f51a 100644
+--- a/tests/php/GDImageTest.php
++++ b/tests/php/GDImageTest.php
+@@ -36,7 +36,7 @@ class GDImageTest extends ImageTestBase
+         $image = $this->objFromFixture(Image::class, 'imageWithTitle');
+         /** @var InterventionBackend $backend */
+         $backend = $image->getImageBackend();
+-        $this->assertInstanceOf(GDDriver::class, $backend->getImageManager()->driver());
++        $this->assertInstanceOf(GDDriver::class, $backend->getImageManager()->driver);
+     }
+ 
+     public function testGetTagWithTitle()
+diff --git a/tests/php/ImageTestBase.php b/tests/php/ImageTestBase.php
+index 8d86b2e..25ebbef 100644
+--- a/tests/php/ImageTestBase.php
++++ b/tests/php/ImageTestBase.php
+@@ -528,6 +528,77 @@ abstract class ImageTestBase extends SapphireTest
+         $this->assertEquals(InterventionBackend::FAILED_INVALID, $cache->get($key .'_reason'));
+     }
+ 
++    public function testLoadFromClassifiesFailures()
++    {
++        $emptyFile = TEMP_PATH . DIRECTORY_SEPARATOR . 'empty-' . uniqid() . '.jpg';
++        file_put_contents($emptyFile, '');
++
++        try {
++            $cases = [
++                'missing' => ['/this/path/does/not/exist.jpg', InterventionBackend::FAILED_MISSING],
++                'not an image' => [__DIR__ . '/ImageTest/not-image.txt', InterventionBackend::FAILED_INVALID],
++                'empty file' => [$emptyFile, InterventionBackend::FAILED_INVALID],
++            ];
++            foreach ($cases as $label => [$path, $expected]) {
++                $backend = new InterventionBackend();
++                $backend->loadFrom($path);
++                $key = $this->getErrorCacheKey(sha1($path), null);
++                $this->assertEquals($expected, $backend->getCache()->get($key . '_reason'), $label);
++            }
++        } finally {
++            unlink($emptyFile);
++        }
++    }
++
++    public function testWriteToAppliesQuality()
++    {
++        $backend = new InterventionBackend();
++        $backend->loadFrom(__DIR__ . '/ImageTest/test-image-high-quality.jpg');
++
++        $sizes = [];
++        foreach ([100, 1] as $quality) {
++            $path = TEMP_PATH . DIRECTORY_SEPARATOR . 'quality-' . $quality . '-' . uniqid() . '.jpg';
++            try {
++                $this->assertTrue($backend->setQuality($quality)->writeTo($path));
++                $sizes[$quality] = filesize($path);
++            } finally {
++                @unlink($path);
++            }
++        }
++        $this->assertLessThan($sizes[100], $sizes[1], 'Quality is not passed on to the encoder in writeTo()');
++    }
++
++    public function testWriteToUnsupportedExtensionFails()
++    {
++        $backend = new InterventionBackend();
++        $backend->loadFrom(__DIR__ . '/ImageTest/test-image.png');
++        $path = TEMP_PATH . DIRECTORY_SEPARATOR . 'unsupported-' . uniqid() . '.notaformat';
++
++        $this->assertFalse($backend->writeTo($path));
++        $this->assertFileDoesNotExist($path);
++    }
++
++    public function testPaddedResizeTransparency()
++    {
++        $backend = new InterventionBackend();
++        $backend->loadFrom(__DIR__ . '/ImageTest/test-image.png');
++
++        // The padding area is the top left corner for a wide canvas
++        $cases = [
++            'opaque by default' => [0, 255],
++            'half transparent' => [50, 128],
++            'fully transparent' => [100, 0],
++        ];
++        foreach ($cases as $label => [$percent, $expectedAlpha]) {
++            $padded = $backend->paddedResize(600, 100, 'FF0000', $percent);
++            $color = $padded->getImageResource()->colorAt(0, 0);
++            $this->assertEqualsWithDelta($expectedAlpha, $color->alpha()->value(), 3, $label);
++            if ($percent < 100) {
++                $this->assertSame(255, $color->red()->value(), $label);
++            }
++        }
++    }
++
+     /**
+      * Test that propertes from the source Image are inherited by resampled images
+      */
+diff --git a/tests/php/ImagickImageTest.php b/tests/php/ImagickImageTest.php
+index 45437f3..3166ebe 100644
+--- a/tests/php/ImagickImageTest.php
++++ b/tests/php/ImagickImageTest.php
+@@ -36,6 +36,6 @@ class ImagickImageTest extends ImageTestBase
+         $image = $this->objFromFixture(Image::class, 'imageWithTitle');
+         /** @var InterventionBackend $backend */
+         $backend = $image->getImageBackend();
+-        $this->assertInstanceOf(ImagickDriver::class, $backend->getImageManager()->driver());
++        $this->assertInstanceOf(ImagickDriver::class, $backend->getImageManager()->driver);
+     }
+ }

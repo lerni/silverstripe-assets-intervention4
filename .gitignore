@@ -1,0 +1,19 @@
+# Composer
+/vendor/
+/composer.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+/.idea/
+/.vscode/
+*.swp
+*~
+
+# Logs and temp files
+*.log
+*.tmp
+*.orig
+*.rej
