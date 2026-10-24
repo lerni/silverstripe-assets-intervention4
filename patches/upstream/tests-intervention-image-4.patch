@@ -15,7 +15,7 @@ diff --git a/tests/php/ImageTestBase.php b/tests/php/ImageTestBase.php
 index 8d86b2e..9c3f1d0 100644
 --- a/tests/php/ImageTestBase.php
 +++ b/tests/php/ImageTestBase.php
-@@ -528,6 +528,110 @@ abstract class ImageTestBase extends SapphireTest
+@@ -528,6 +528,109 @@ abstract class ImageTestBase extends SapphireTest
          $this->assertEquals(InterventionBackend::FAILED_INVALID, $cache->get($key .'_reason'));
      }
  
