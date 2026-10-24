@@ -1,0 +1,44 @@
+diff --git a/src/InterventionBackend.php b/src/InterventionBackend.php
+index 2f1e88a..c9a12e8 100644
+--- a/src/InterventionBackend.php
++++ b/src/InterventionBackend.php
+@@ -5,6 +5,7 @@ namespace SilverStripe\Assets;
+ use BadMethodCallException;
+ use Intervention\Image\Colors\Rgb\Color;
+ use Intervention\Image\Drivers\AbstractEncoder;
++use Intervention\Image\Drivers\Vips\Core as VipsCore;
+ use Intervention\Image\Exceptions\ArgumentException;
+ use Intervention\Image\Exceptions\DecoderException;
+ use Intervention\Image\Exceptions\EncoderException;
+@@ -292,6 +293,9 @@ class InterventionBackend implements Image_Backend, Flushable
+             if (!$resource) {
+                 throw new BadMethodCallException("Cannot write corrupt file to store");
+             }
++            if ($resource->core() instanceof VipsCore) {
++                VipsCore::ensureInMemory($resource->core());
++            }
+ 
+             // Make sure we're using the extension of the variant file, which can differ from the original file
+             $url = $assetStore->getAsURL($filename, $hash, $variant, false);
+@@ -328,6 +332,9 @@ class InterventionBackend implements Image_Backend, Flushable
+             if (!$resource) {
+                 throw new BadMethodCallException("Cannot write corrupt file to store");
+             }
++            if ($resource->core() instanceof VipsCore) {
++                VipsCore::ensureInMemory($resource->core());
++            }
+             $resource->save($path, quality: $this->getQuality());
+         } catch (EncoderException | NotSupportedException | ArgumentException $e) {
+             return false;
+@@ -630,6 +637,11 @@ class InterventionBackend implements Image_Backend, Flushable
+                 return null;
+             }
+ 
++            $core = $resource->core();
++            if ($core instanceof VipsCore && $core->stashedSource() === null) {
++                VipsCore::ensureInMemory($core);
++            }
++
+             // Note: Closure may simply modify the resource rather than return a new one
+             $resource = clone $resource;
+             $resource = call_user_func($resourceOrTransformation, $resource) ?: $resource;

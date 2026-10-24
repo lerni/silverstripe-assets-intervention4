@@ -1,0 +1,12 @@
+diff --git a/src/InterventionBackend.php b/src/InterventionBackend.php
+index 7854af0..2f1e88a 100644
+--- a/src/InterventionBackend.php
++++ b/src/InterventionBackend.php
+@@ -384,6 +384,7 @@ class InterventionBackend implements Image_Backend, Flushable
+         if ($resource) {
+             $result = $this->getResourceDimensions($resource);
+             $cache->set($key, $result);
++            $this->setImageResource(null);
+         }
+         return $result;
+     }
