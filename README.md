@@ -81,6 +81,45 @@ SilverStripe\Core\Injector\Injector:
     class: Intervention\Image\Drivers\Vips\Driver
 ```
 
+#### PHP requirements
+
+libvips is called through PHP's FFI (`jcupitt/vips`), which only binds to the system library: `libvips.so.42` has to be installed on the server (Debian package `libvips42`, `libvips42t64` on Debian 13). Besides that the FFI extension has to be enabled.
+
+```ini
+extension=ffi.so
+ffi.enable="true"
+```
+
+`ffi.enable` defaults to `preload`, which blocks FFI at runtime. On shared hosting put the lines where the host allows custom ini files and check that CLI and web use the same PHP version.
+
+#### Project glue (recommended)
+
+The module itself does not ship these; the ootstra uses them:
+
+- [`ImageManagerFactory`](https://github.com/lerni/ootstra/blob/master/app/src/Utility/ImageManagerFactory.php) replaces `InterventionManagerFactory`. It builds `new ImageManager($driver, autoOrientation: true)` and avoids a `TypeError` in Intervention's `Config::prepareOptions()` when Silverstripe's Injector merges constructor arguments as integer-keyed entries and limits libvips threads, see below.
+
+  ```yaml
+  SilverStripe\Core\Injector\Injector:
+    Intervention\Image\ImageManager:
+      factory: '%$App\Utility\ImageManagerFactory'
+  ```
+
+- **`VIPS_CONCURRENCY`**: libvips starts one worker thread per CPU core, which exhausts the process limits of shared hosting (glib `Error creating thread`). The factory calls `Config::concurrencySet()` with the value of `VIPS_CONCURRENCY` from `.env` (default `1`). It has to be set this way because `.env` is not exported to the C environment, so libvips would never see it as a plain environment variable.
+
+  ```dotenv
+  VIPS_CONCURRENCY=2
+  ```
+
+- [`AvifFileConverter`](https://github.com/lerni/ootstra/blob/master/app/src/Conversion/AvifFileConverter.php) extends `InterventionImageFileConverter`: it applies a lower default quality for AVIF (`avif_quality`, AVIF at Q55 is about JPEG at Q75), logs the full chain of previous exceptions when a conversion fails (the core only logs the outer message, the libvips cause is in the previous ones), and falls back to the already scaled variant instead of an empty `src`.
+
+  ```yaml
+  SilverStripe\Core\Injector\Injector:
+    SilverStripe\Assets\Conversion\InterventionImageFileConverter:
+      class: App\Conversion\AvifFileConverter
+  App\Conversion\AvifFileConverter:
+    avif_quality: 50
+  ```
+
 ## Project code that has to change for Intervention Image 4
 
 If custom project code interacts directly with `Intervention\Image` classes or resources, update v3 calls to v4:
