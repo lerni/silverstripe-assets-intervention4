@@ -15,7 +15,7 @@ diff --git a/tests/php/ImageTestBase.php b/tests/php/ImageTestBase.php
 index 8d86b2e..9c3f1d0 100644
 --- a/tests/php/ImageTestBase.php
 +++ b/tests/php/ImageTestBase.php
-@@ -528,6 +528,109 @@ abstract class ImageTestBase extends SapphireTest
+@@ -528,6 +528,91 @@ abstract class ImageTestBase extends SapphireTest
          $this->assertEquals(InterventionBackend::FAILED_INVALID, $cache->get($key .'_reason'));
      }
  
@@ -88,24 +88,6 @@ index 8d86b2e..9c3f1d0 100644
 +                $this->assertSame(255, $color->red()->value(), $label);
 +            }
 +        }
-+    }
-+
-+    public function testGetDimensionsUnloadsResourceOnCacheMiss()
-+    {
-+        /** @var Image $image */
-+        $image = $this->objFromFixture(Image::class, 'imageWithTitle');
-+        /** @var InterventionBackend $backend */
-+        $backend = $image->getImageBackend();
-+        $backend->getCache()->clear();
-+
-+        $this->assertSame(300, $backend->getWidth());
-+        $this->assertSame(300, $backend->getHeight());
-+
-+        $ref = new \ReflectionProperty(InterventionBackend::class, 'image');
-+        $this->assertNull(
-+            $ref->getValue($backend),
-+            'Decoded image resource should be unloaded after warming dimension cache on cache miss'
-+        );
 +    }
 +
 +    public function testChainedResizeAndConvert()

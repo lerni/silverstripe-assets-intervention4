@@ -1,0 +1,59 @@
+diff --git a/code/Model/ImageEditor.php b/code/Model/ImageEditor.php
+index b691277e..051b1f60 100644
+--- a/code/Model/ImageEditor.php
++++ b/code/Model/ImageEditor.php
+@@ -2,6 +2,8 @@
+ 
+ namespace SilverStripe\AssetAdmin\Model;
+ 
++use Intervention\Image\Direction;
++use Intervention\Image\Drivers\Vips\Core as VipsCore;
+ use Intervention\Image\Interfaces\ImageInterface;
+ use InvalidArgumentException;
+ use RuntimeException;
+@@ -245,22 +247,25 @@ class ImageEditor
+         // The full-resolution decode, plus the clone below, can exceed the default memory_limit.
+         Environment::increaseMemoryLimitTo();
+ 
++        $core = $resource->core();
++        if ($core instanceof VipsCore && $core->stashedSource() === null) {
++            VipsCore::ensureInMemory($core);
++        }
++
+         // Clone so the backend's cached resource is never mutated.
+         $resource = clone $resource;
+         $sourceWidth = $resource->width();
+         $sourceHeight = $resource->height();
+ 
+         if ($transforms['flip']['horizontal']) {
+-            $resource->flop();
++            $resource->flip(Direction::HORIZONTAL);
+         }
+         if ($transforms['flip']['vertical']) {
+-            $resource->flip();
++            $resource->flip(Direction::VERTICAL);
+         }
+ 
+-        // The contract is clockwise but Intervention rotates counter-clockwise for positive angles.
+-        $angle = (360 - $transforms['rotate']) % 360;
+-        if ($angle !== 0) {
+-            $resource->rotate($angle);
++        if ($transforms['rotate'] !== 0) {
++            $resource->rotate($transforms['rotate']);
+         }
+ 
+         [$left, $top, $width, $height] = $this->calculateCropBox($sourceWidth, $sourceHeight, $transforms);
+@@ -272,8 +277,12 @@ class ImageEditor
+             $resource->resize($resizeWidth, $resizeHeight);
+         }
+ 
++        if ($resource->core() instanceof VipsCore) {
++            VipsCore::ensureInMemory($resource->core());
++        }
++
+         return (string) $resource
+-            ->encodeByExtension($source->getExtension(), quality: $this->getOutputQuality($backend))
++            ->encodeUsingFileExtension($source->getExtension(), quality: $this->getOutputQuality($backend))
+             ->toString();
+     }
+ 
