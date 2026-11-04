@@ -34,6 +34,13 @@
 					"sha256": "d3cab30425485c99565095f9c7965bfa8e418224c8e12873634daec25e684cce"
 				}
 			],
+			"intervention/image-driver-vips": [
+				{
+					"description": "Web-tuned JXL effort default (5) in the libvips JXL encoder, complements image-driver-vips #113",
+					"url": "https://raw.githubusercontent.com/lerni/silverstripe-assets-intervention4/3.3.1/patches/0006-vips-jxl-effort-default.patch",
+					"sha256": "45ba97375193e98603d82aeee5a4c62097596cb94872e141a168e158a2af1e50"
+				}
+			],
 			"silverstripe/asset-admin": [
 				{
 					"description": "Port ImageEditor to Intervention Image 4 and ensure libvips pipelines are in memory",

@@ -14,7 +14,7 @@ ImageMagick (`ext-imagick`) works well, but requires too much memory and pixel-c
 - `provide`s `intervention/image` `3.11.99` to satisfy `silverstripe/assets`'s `intervention/image ^3.9` requirement while
   the real `intervention/image ^4.4` (and `intervention/gif ^5`) is installed. No inline alias in the root `composer.json`
   is needed (Composer does not apply inline aliases to tagged releases).
-- Declares patches for `silverstripe/assets` and `silverstripe/asset-admin` in `extra.patches` of `composer.json` (fetched by `cweagans/composer-patches`
+- Declares patches for `silverstripe/assets`, `silverstripe/asset-admin` and `intervention/image-driver-vips` in `extra.patches` of `composer.json` (fetched by `cweagans/composer-patches`
   from raw GitHub URLs pinned to the release tag and verified via `sha256`):
 
 | Patch | Upstream status / target | Content |
@@ -24,6 +24,7 @@ ImageMagick (`ext-imagick`) works well, but requires too much memory and pixel-c
 | `0003-unload-resource-after-dimension-cache-miss.patch` (**merged, no longer applied in 3.3.x**) | `silverstripe/silverstripe-assets` ([#718](https://github.com/silverstripe/silverstripe-assets/pull/718)), **merged into `3.3`**, released with 3.3.2. Still applied by the `3.2.*` tags. | Unloads the decoded `InterventionImage` resource (`setImageResource(null)`) after warming the dimension cache on a cache miss in `InterventionBackend::getDimensions()`, preventing unbounded memory retention during bulk dimension lookups. Note: if a manipulation runs on the same backend instance immediately after a cold-cache dimension lookup, the image will be decoded a second time (whereas `manipulateImage()` loads the resource before `getDimensions()` is called, so normal `FillMax`/`Pad` calls are unaffected). |
 | `0004-vips-ensure-in-memory.patch` | `Intervention/image-driver-vips` / `silverstripe/silverstripe-assets` | Calls `Intervention\Image\Drivers\Vips\Core::ensureInMemory()` before encoding (`writeToStore()` / `writeTo()`) and before cloning a modified resource (`createCloneWithResource()`). When using `intervention/image-driver-vips`, sources are opened in `Vips\Access::SEQUENTIAL` mode for single-pass streaming; if a manipulated `DBFile` hands its `Image_Backend` on to a chained manipulation or format conversion (e.g. `$Image.ScaleMaxHeight(284).Convert('webp')`), the first encode consumes the sequential pipeline and the second fails with `VIPS-WARNING: error in tile 0 x 0`. Rendering the already-scaled pipeline to memory before encoding/cloning allows arbitrary chained encodes and manipulations. |
 | `0005-asset-admin-image-editor-intervention-image-4.patch` | `silverstripe/silverstripe-asset-admin` (>= 3.3) | Intervention Image 4 port of `ImageEditor` (`Direction::HORIZONTAL`/`VERTICAL` for `flip()`, clockwise `rotate()`, `encodeUsingFileExtension()`, and `VipsCore::ensureInMemory()`). |
+| `0006-vips-jxl-effort-default.patch` | `Intervention/image-driver-vips` (to be proposed upstream as the JXL counterpart of [#113](https://github.com/Intervention/image-driver-vips/pull/113); only applied when the driver is installed) | Sets `effort => 5` in the libvips `JxlEncoder`. #113 gave AVIF/HEIC (1) and WebP (2) web-tuned effort defaults but left JXL at libvips' default of 7, which is 2.5–3× slower than 5 for equal or slightly larger bytes. Drop once released upstream. |
 | `upstream/tests-intervention-image-4.patch` | `silverstripe/silverstripe-assets` (not applied by Composer) | Test changes for the port: `GDImageTest` / `ImagickImageTest` use the v4 `driver` property, plus new tests in `ImageTestBase` (`writeTo()` quality, `paddedResize()` transparency, failure classification, chained manipulations/conversions). **Not applied by Composer** because the dist archive of `silverstripe/assets` ships no `tests/`. Kept in the repo for upstream PRs. |
 
 ## Companion: `axllent/silverstripe-scaled-uploads`
@@ -119,6 +120,22 @@ The module itself does not ship these; the ootstra uses them:
   App\Conversion\AvifFileConverter:
     avif_quality: 50
   ```
+
+### Encoder effort (CPU vs. bytes)
+
+Besides `Q`, libvips' AVIF, JXL and WebP savers take an `effort` option that trades encoding time for file size. Intervention 4 doesn't expose it: the generic encoders only know `quality`/`strip`, `Format::encoder()` filters anything else out, and the manager `Config` is a closed set (`autoOrientation`, `decodeAnimation`, `backgroundColor`, `strip`), so there's no driver-level hook either. The vips driver hard-codes web-tuned defaults instead ([#113](https://github.com/Intervention/image-driver-vips/pull/113): AVIF/HEIC 1, WebP 2); patch `0006` adds the missing JXL default (5).
+
+Measured on a 1920 px photo and a 1920 px flat graphic, Q75, libvips 8.16.1:
+
+| JXL effort | photo | graphic |
+|---|---|---|
+| 3 | 353 KB / 34 ms | 83 KB / 26 ms |
+| 4 | 358 KB / 44 ms | 86 KB / 33 ms |
+| **5** | **316 KB / 133 ms** | **87 KB / 131 ms** |
+| 7 (libvips default) | 319 KB / 334 ms | 88 KB / 371 ms |
+| 9 | 297 KB / 2.7 s | 80 KB / 2.9 s |
+
+Making effort configurable was considered and dropped for now: a nullable `effort` parameter on the generic encoders was proposed in #113 and declined by the maintainer as a driver-specific option in the unified API; broader encoder options are tracked for the next major in [Intervention/image#1491](https://github.com/Intervention/image/issues/1491). Carrying such a patch here would be permanent, so this package sticks to defaults that can go upstream.
 
 ## Project code that has to change for Intervention Image 4
 
