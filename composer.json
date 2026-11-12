@@ -10,7 +10,8 @@
 		"intervention/image": "^4.4"
 	},
 	"conflict": {
-		"silverstripe/asset-admin": "<3.3.0 || >=3.4.0"
+		"silverstripe/asset-admin": "<3.3.0 || >=3.4.0",
+		"intervention/image-driver-vips": "<4.2.0 || >=4.3.0"
 	},
 	"provide": {
 		"intervention/image": "3.11.99"
