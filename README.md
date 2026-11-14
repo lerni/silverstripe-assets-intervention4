@@ -25,7 +25,7 @@ ImageMagick (`ext-imagick`) works well, but requires too much memory and pixel-c
 | `0004-vips-ensure-in-memory.patch` | `Intervention/image-driver-vips` / `silverstripe/silverstripe-assets` | Calls `Intervention\Image\Drivers\Vips\Core::ensureInMemory()` before encoding (`writeToStore()` / `writeTo()`) and before cloning a modified resource (`createCloneWithResource()`). When using `intervention/image-driver-vips`, sources are opened in `Vips\Access::SEQUENTIAL` mode for single-pass streaming; if a manipulated `DBFile` hands its `Image_Backend` on to a chained manipulation or format conversion (e.g. `$Image.ScaleMaxHeight(284).Convert('webp')`), the first encode consumes the sequential pipeline and the second fails with `VIPS-WARNING: error in tile 0 x 0`. Rendering the already-scaled pipeline to memory before encoding/cloning allows arbitrary chained encodes and manipulations. |
 | `0005-asset-admin-image-editor-intervention-image-4.patch` | `silverstripe/silverstripe-asset-admin` (>= 3.3) | Intervention Image 4 port of `ImageEditor` (`Direction::HORIZONTAL`/`VERTICAL` for `flip()`, clockwise `rotate()`, `encodeUsingFileExtension()`, and `VipsCore::ensureInMemory()`). |
 | `0006-vips-jxl-effort-default.patch` | `Intervention/image-driver-vips` (to be proposed upstream as the JXL counterpart of [#113](https://github.com/Intervention/image-driver-vips/pull/113); only applied when the driver is installed) | Sets `effort => 5` in the libvips `JxlEncoder`. #113 gave AVIF/HEIC (1) and WebP (2) web-tuned effort defaults but left JXL at libvips' default of 7, which is 2.5–3× slower than 5 and yields equal or slightly larger files. Drop once released upstream. |
-| `0007-reset-image-backend-on-file-replace.patch` | `silverstripe/silverstripe-assets` ([#724](https://github.com/silverstripe/silverstripe-assets/issues/724), PR: <link>), driver-independent bugfix targeting `3.3` | Resets `$this->imageBackend = null` in `File::setFromLocalFile()`, `setFromStream()` and `setFromString()` when a file is replaced on an existing record. Without this, any caller that loaded the backend before replacing the file on the same record (e.g. `silverstripe/asset-admin`'s `ImageEditor::editImage()`) keeps the pre-edit resource cached on the record, so subsequent `getWidth()`/`getHeight()` calls (including `FocusPointImageExtension::onBeforeWrite()`) read and persist the stale pre-edit dimensions. Drop once the fix is released upstream. |
+| `0007-reset-image-backend-on-file-replace.patch` | `silverstripe/silverstripe-assets` ([#724](https://github.com/silverstripe/silverstripe-assets/issues/724), PR: [#725](https://github.com/silverstripe/silverstripe-assets/pull/725)), driver-independent bugfix targeting `3.3` | Resets `$this->imageBackend = null` in `File::setFromLocalFile()`, `setFromStream()` and `setFromString()` when a file is replaced on an existing record. Without this, any caller that loaded the backend before replacing the file on the same record (e.g. `silverstripe/asset-admin`'s `ImageEditor::editImage()`) keeps the pre-edit resource cached on the record, so subsequent `getWidth()`/`getHeight()` calls (including `FocusPointImageExtension::onBeforeWrite()`) read and persist the stale pre-edit dimensions. Drop once the fix is released upstream. |
 | `upstream/tests-intervention-image-4.patch` | `silverstripe/silverstripe-assets` (not applied by Composer) | Test changes for the port: `GDImageTest` / `ImagickImageTest` use the v4 `driver` property, plus new tests in `ImageTestBase` (`writeTo()` quality, `paddedResize()` transparency, failure classification, chained manipulations/conversions). **Not applied by Composer** because the dist archive of `silverstripe/assets` ships no `tests/`. Kept in the repo for upstream PRs. |
 
 ## Companion: `axllent/silverstripe-scaled-uploads`
@@ -38,6 +38,19 @@ Upstream `axllent/silverstripe-scaled-uploads` copies every upload to a file in 
 ],
 "require": {
     "axllent/silverstripe-scaled-uploads": "dev-fix/read-source-from-asset-store as 2.3.99"
+}
+```
+
+## Companion: `jonom/focuspoint`
+
+`jonom/focuspoint` crops from the width and height it caches on the image. When those no longer match the file (e.g. after the image editor of `silverstripe/asset-admin` 3.3 replaced it, see patch `0007`), the crop box lies outside the image and `FocusFill*()` fails (with the vips driver: `extract_area: bad extract area`). [jonom/silverstripe-focuspoint#130](https://github.com/jonom/silverstripe-focuspoint/pull/130) falls back to a centered crop in that case and clamps the focus coordinates to the image. The fix does not depend on the image driver. Until it is released, require it from the fork branch:
+
+```json
+"repositories": [
+    { "type": "vcs", "url": "https://github.com/lerni/silverstripe-focuspoint" }
+],
+"require": {
+    "jonom/focuspoint": "dev-guard-stale-dimensions-and-clamp-coords as 6.0.99"
 }
 ```
 
