@@ -33,6 +33,11 @@
 					"description": "Render sequential libvips pipelines to memory before encoding or cloning",
 					"url": "https://raw.githubusercontent.com/lerni/silverstripe-assets-intervention4/3.3.0/patches/0004-vips-ensure-in-memory.patch",
 					"sha256": "d3cab30425485c99565095f9c7965bfa8e418224c8e12873634daec25e684cce"
+				},
+				{
+					"description": "Reset cached Image_Backend when replacing a file via setFromLocalFile/setFromStream/setFromString",
+					"url": "https://raw.githubusercontent.com/lerni/silverstripe-assets-intervention4/3.3.2/patches/0007-reset-image-backend-on-file-replace.patch",
+					"sha256": "3f44ed354abe2c133a19fd3cd008ca29991d545a6cb50bc640ebe55faa588808"
 				}
 			],
 			"intervention/image-driver-vips": [

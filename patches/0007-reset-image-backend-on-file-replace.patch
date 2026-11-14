@@ -1,0 +1,31 @@
+diff --git a/src/File.php b/src/File.php
+index 95b6697..3a8dc7d 100644
+--- a/src/File.php
++++ b/src/File.php
+@@ -1286,6 +1286,8 @@ class File extends DataObject implements AssetContainer, Thumbnail, CMSPreviewab
+         // Update File record to name of the uploaded asset
+         if ($result) {
+             $this->setFilename($result['Filename']);
++            // The cached backend still holds the replaced file's resource.
++            $this->imageBackend = null;
+         }
+         return $result;
+     }
+@@ -1297,6 +1299,8 @@ class File extends DataObject implements AssetContainer, Thumbnail, CMSPreviewab
+         // Update File record to name of the uploaded asset
+         if ($result) {
+             $this->setFilename($result['Filename']);
++            // The cached backend still holds the replaced file's resource.
++            $this->imageBackend = null;
+         }
+         return $result;
+     }
+@@ -1308,6 +1312,8 @@ class File extends DataObject implements AssetContainer, Thumbnail, CMSPreviewab
+         // Update File record to name of the uploaded asset
+         if ($result) {
+             $this->setFilename($result['Filename']);
++            // The cached backend still holds the replaced file's resource.
++            $this->imageBackend = null;
+         }
+         return $result;
+     }
